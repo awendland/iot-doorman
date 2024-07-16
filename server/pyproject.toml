@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "fastapi>=0.111.0",
     "structlog>=24.2.0",
+    "cachetools>=5.4.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

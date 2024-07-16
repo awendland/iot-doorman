@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Literal, Optional, Union
 from fastapi import (
     FastAPI,
@@ -16,6 +17,7 @@ from starlette.types import Message
 import structlog
 import secrets
 import base64
+from cachetools import TTLCache
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
@@ -53,7 +55,7 @@ async def device_security(websocket: WebSocket):
 
 class UserSessions:
     def __init__(self):
-        self.sessions = {}
+        self.sessions = TTLCache(maxsize=100, ttl=30 * 24 * 60 * 60)
 
     def login(self, username: str, password: str) -> Optional[str]:
         if username == "tenant" and password == "95sZG4wPjL8FDT":
@@ -265,4 +267,8 @@ async def ws_client(raw_websocket: WebSocket):
         await manager.disconnect_client(websocket)
 
 
-app.mount("/", StaticFiles(directory="app/static/", html=True), name="static")
+app.mount(
+    "/",
+    StaticFiles(directory=Path(__file__).parent / "static", html=True),
+    name="static",
+)

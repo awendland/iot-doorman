@@ -11,66 +11,70 @@
         if (savedUsername && savedPassword) {
           document.getElementById("username").value = savedUsername;
           document.getElementById("password").value = savedPassword;
+          login();
+        }
+
+        async function login() {
+          var username = document.getElementById("username").value;
+          var password = document.getElementById("password").value;
+
+          // Save credentials to localStorage
+          localStorage.setItem("username", username);
+          localStorage.setItem("password", password);
+
+          try {
+            // Create a new fetch request
+            const response = await fetch("/ws/client_auth", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: `username=${encodeURIComponent(
+                username
+              )}&password=${encodeURIComponent(password)}`,
+            });
+            if (!response.ok) {
+              console.log("Authentication failed");
+              return;
+            }
+          } catch (error) {
+            console.error("Error:", error);
+            return;
+          }
+
+          // WebSocket connection logic
+          socket = new WebSocket(
+            `ws${window.location.protocol === "https:" ? "s" : ""}://${
+              window.location.host
+            }/ws/client`
+          );
+
+          socket.onopen = function (event) {
+            console.log("WebSocket connection established.");
+            requestHistory();
+          };
+
+          socket.onmessage = function (event) {
+            console.log("Received message:", event.data);
+            var message = JSON.parse(event.data);
+            if (message.type === "device.status") {
+              _history.push([new Date(), message]);
+            } else if (message.type === "client.response_history") {
+              _history = message.history;
+            }
+            updateHistory(_history); // Use _history for update
+          };
+
+          socket.onclose = function (event) {
+            console.log("WebSocket connection closed.");
+          };
         }
 
         document
           .getElementById("loginForm")
           .addEventListener("submit", async function (event) {
             event.preventDefault(); // Prevent form from submitting traditionally
-
-            var username = document.getElementById("username").value;
-            var password = document.getElementById("password").value;
-
-            // Save credentials to localStorage
-            localStorage.setItem("username", username);
-            localStorage.setItem("password", password);
-
-            try {
-              // Create a new fetch request
-              const response = await fetch("/ws/client_auth", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `username=${encodeURIComponent(
-                  username
-                )}&password=${encodeURIComponent(password)}`,
-              });
-              if (!response.ok) {
-                console.log("Authentication failed");
-                return;
-              }
-            } catch (error) {
-              console.error("Error:", error);
-              return;
-            }
-
-            // WebSocket connection logic
-            socket = new WebSocket(
-              `ws${window.location.protocol === "https:" ? "s" : ""}://${
-                window.location.host
-              }/ws/client`
-            );
-
-            socket.onopen = function (event) {
-              console.log("WebSocket connection established.");
-              requestHistory();
-            };
-
-            socket.onmessage = function (event) {
-              console.log("Received message:", event.data);
-              var message = JSON.parse(event.data);
-              if (message.type === "device.status") {
-                _history.push([new Date(), message]);
-              } else if (message.type === "client.response_history") {
-                _history = message.history;
-              }
-              updateHistory(_history); // Use _history for update
-            };
-
-            socket.onclose = function (event) {
-              console.log("WebSocket connection closed.");
-            };
+            await login();
           });
 
         window.sendCommand = function () {
