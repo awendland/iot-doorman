@@ -1,0 +1,24 @@
+[project]
+name = "server"
+version = "0.1.0"
+description = "Centralized web server for IOT doorman"
+authors = [
+    { name = "Alex Wendland", email = "me@alexwendland.com" }
+]
+dependencies = [
+    "fastapi>=0.111.0",
+    "structlog>=24.2.0",
+]
+readme = "README.md"
+requires-python = ">= 3.12"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = [
+    "pyright>=1.1.371",
+]
+
+[tool.pytest.ini_options]
+pythonpath = "src"

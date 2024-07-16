@@ -1,0 +1,37 @@
+#!/usr/bin/env just --justfile
+# Just is a replacement for Make. It's focused on running project-specific instead
+# of building C code, so it's easier to work with. It's available in almost all
+# package libraries, e.g., `brew install just`.
+#
+# Quick Start: https://just.systems/man/en/chapter_18.html
+
+default:
+    @just --list
+
+# Ensure that python packages are installed
+setup-python:
+    rye --version
+    rye sync
+
+# Must be run after you've followed the "Setup" instruction in README.md.
+setup: setup-python
+
+python-venv:
+    #!/bin/bash
+    echo "Run . .venv/bin/activate or .venv/bin/activate.ifhs to activate the virtual environment"
+
+# Run the development server
+dev:
+    rye run fastapi dev --host 0.0.0.0
+
+# Build the Docker image
+docker-build:
+    docker build .
+
+# Format the code
+format:
+    rye fmt
+
+# Lint the code
+lint:
+    rye lint
