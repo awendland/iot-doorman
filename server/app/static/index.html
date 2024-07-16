@@ -1,0 +1,129 @@
+<html>
+  <head>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var socket; // Declare socket globally to use after login
+        var _history = [];
+
+        // Check localStorage for saved credentials
+        var savedUsername = localStorage.getItem("username");
+        var savedPassword = localStorage.getItem("password");
+        if (savedUsername && savedPassword) {
+          document.getElementById("username").value = savedUsername;
+          document.getElementById("password").value = savedPassword;
+        }
+
+        document
+          .getElementById("loginForm")
+          .addEventListener("submit", async function (event) {
+            event.preventDefault(); // Prevent form from submitting traditionally
+
+            var username = document.getElementById("username").value;
+            var password = document.getElementById("password").value;
+
+            // Save credentials to localStorage
+            localStorage.setItem("username", username);
+            localStorage.setItem("password", password);
+
+            try {
+              // Create a new fetch request
+              const response = await fetch("/ws/client_auth", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `username=${encodeURIComponent(
+                  username
+                )}&password=${encodeURIComponent(password)}`,
+              });
+              if (!response.ok) {
+                console.log("Authentication failed");
+                return;
+              }
+            } catch (error) {
+              console.error("Error:", error);
+              return;
+            }
+
+            // WebSocket connection logic
+            socket = new WebSocket(
+              `ws${window.location.protocol === "https:" ? "s" : ""}://${
+                window.location.host
+              }/ws/client`
+            );
+
+            socket.onopen = function (event) {
+              console.log("WebSocket connection established.");
+              requestHistory();
+            };
+
+            socket.onmessage = function (event) {
+              console.log("Received message:", event.data);
+              var message = JSON.parse(event.data);
+              if (message.type === "device.status") {
+                _history.push([new Date(), message]);
+              } else if (message.type === "client.response_history") {
+                _history = message.history;
+              }
+              updateHistory(_history); // Use _history for update
+            };
+
+            socket.onclose = function (event) {
+              console.log("WebSocket connection closed.");
+            };
+          });
+
+        window.sendCommand = function () {
+          // Make sendCommand globally accessible
+          var command = {
+            type: "client.send_command",
+            command: {
+              type: "device.cmd",
+              cmd: "unlock",
+              duration: 5,
+            },
+          };
+          socket.send(JSON.stringify(command));
+        };
+
+        function requestHistory() {
+          var request = {
+            type: "client.request_history",
+            max_entries: 8,
+          };
+          socket.send(JSON.stringify(request));
+        }
+
+        function updateHistory(history) {
+          var historyElement = document.getElementById("history");
+          historyElement.textContent = "";
+          var firstStatus;
+          for (var i = history.length - 1; i >= 0; i--) {
+            // Use passed history for iteration
+            var entry = history[i];
+            var timestamp = new Date(entry[0]);
+            if (!firstStatus && entry[1].type === "device.status") {
+              firstStatus = entry[1].status;
+            }
+            var historyItem =
+              timestamp.toLocaleString() + ": " + JSON.stringify(entry[1]);
+            historyElement.textContent += historyItem + "\n";
+          }
+          var statusElement = document.getElementById("status");
+          statusElement.textContent = "Status: " + firstStatus;
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <form id="loginForm">
+      <input type="text" id="username" placeholder="Username" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button type="submit">Login</button>
+    </form>
+    <button onclick="sendCommand()">Unlock</button>
+    <pre id="status">Status: </pre>
+    <pre id="history"></pre>
+  </body>
+</html>

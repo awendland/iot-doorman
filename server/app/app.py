@@ -2,125 +2,73 @@ import asyncio
 from datetime import datetime
 from typing import Annotated, Literal, Optional, Union
 from fastapi import (
-    Depends,
     FastAPI,
+    Form,
     HTTPException,
+    Response,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
-from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from starlette.types import Message
 import structlog
 import secrets
 import base64
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 app = FastAPI()
 
-security = HTTPBasic()
 
-
-def gen_security(username: str, password: str):
-    def security_middleware(
-        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
-    ):
+async def device_security(websocket: WebSocket):
+    username = "device"
+    password = "niYmTfkJ9c2k6XSD5y6LrC7Wcrpute"
+    auth_header = websocket.headers.get("Authorization")
+    if not auth_header:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    try:
+        scheme, credentials = auth_header.split()
+        if scheme.lower() != "basic":
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        decoded = base64.b64decode(credentials).decode("ascii")
+        in_username, _, in_password = decoded.partition(":")
         is_correct_username = secrets.compare_digest(
-            credentials.username.encode("utf8"), username.encode("utf8")
+            in_username.encode("utf8"), username.encode("utf8")
         )
         is_correct_password = secrets.compare_digest(
-            credentials.password.encode("utf8"), password.encode("utf8")
+            in_password.encode("utf8"), password.encode("utf8")
         )
         if not (is_correct_username and is_correct_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Basic"},
-            )
-        return credentials.username
-
-    return security_middleware
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        return username
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
 
-@app.get("/")
-async def root():
-    return HTMLResponse("""\
-<html>
-<head>
-    <script>
-    {
-        var socket = new WebSocket(`ws${window.location.protocol === "https:" ? "s" : ""}://${window.location.host}/ws/client`);
-        var _history = [];
+class UserSessions:
+    def __init__(self):
+        self.sessions = {}
 
-        socket.onopen = function(event) {
-            console.log("WebSocket connection established.");
-            requestHistory();
-        };
+    def login(self, username: str, password: str) -> Optional[str]:
+        if username == "tenant" and password == "95sZG4wPjL8FDT":
+            session_id = base64.b32encode(secrets.token_bytes(10)).decode()
+            self.sessions[session_id] = username
+            return session_id
+        return None
 
-        socket.onmessage = function(event) {
-            console.log("Received message:", event.data);
-            var message = JSON.parse(event.data);
-            if (message.type === "device.status") {
-                _history.push([new Date(), message]);
-            } else if (message.type === "client.response_history") {
-                _history = message.history;
-            }
-            updateHistory(message.history);
-        };
+    def check(self, session_id: Optional[str]) -> Optional[str]:
+        if not session_id:
+            return None
+        return self.sessions.get(session_id, None)
 
-        socket.onclose = function(event) {
-            console.log("WebSocket connection closed.");
-        };
 
-        function sendCommand() {
-            var command = {
-                type: "client.send_command",
-                command: {
-                    type: "device.cmd",
-                    cmd: "unlock",
-                    duration: 5
-                }
-            };
-            socket.send(JSON.stringify(command));
-        }
-
-        function requestHistory() {
-            var request = {
-                type: "client.request_history",
-                max_entries: 8
-            };
-            socket.send(JSON.stringify(request));
-        }
-
-        function updateHistory(history) {
-            var historyElement = document.getElementById("history");
-            historyElement.textContent = "";
-            var firstStatus;
-            for (var i = _history.length - 1; i >= 0; i--) {
-                var entry = _history[i];
-                var timestamp = new Date(entry[0]);
-                if (!firstStatus && entry[1].type === "device.status") {
-                    firstStatus = entry[1].status;
-                }
-                var historyItem = timestamp.toLocaleString() + ": " + JSON.stringify(entry[1]);
-                historyElement.textContent += historyItem + "\\n";
-            }
-            var statusElement = document.getElementById("status");
-            statusElement.textContent = "Status: " + firstStatus;
-        }
-    }
-    </script>
-</head>
-<body>
-    <button onclick="sendCommand()">Unlock</button>
-    <pre id="status">Status: </pre>
-    <pre id="history"></pre>
-</body>
-</html>
-""")
+user_sessions = UserSessions()
 
 
 class DeviceCommandUnlock(BaseModel):
@@ -243,13 +191,12 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-device_security = gen_security("device", "niYmTfkJ9c2k6XSD5y6LrC7Wcrpute")
-
 
 @app.websocket("/ws/device")
-async def ws_device(
-    raw_websocket: WebSocket, username: Annotated[str, Depends(device_security)]
-):
+async def ws_device(raw_websocket: WebSocket):
+    username = await device_security(raw_websocket)
+    if not username:
+        return
     websocket = WebSocketU(raw_websocket, "device")
     log = logger.bind(device_id=websocket.id)
     await manager.connect_device(websocket)
@@ -270,13 +217,27 @@ async def ws_device(
         await manager.disconnect_device()
 
 
-client_security = gen_security("tenant", "95sZG4wPjL8FDT")
+@app.post("/ws/client_auth")
+def client_auth_endpoint(
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+    response: Response,
+):
+    session_id = user_sessions.login(username, password)
+    if not session_id:
+        return HTTPException(status_code=401, detail="Authentication failed")
+    response.set_cookie(key="session_id", value=session_id)
+    return ""
 
 
 @app.websocket("/ws/client")
-async def ws_client(
-    raw_websocket: WebSocket, username: Annotated[str, Depends(client_security)]
-):
+async def ws_client(raw_websocket: WebSocket):
+    username = user_sessions.check(raw_websocket.cookies.get("session_id"))
+    if not username:
+        return HTTPException(
+            status_code=401,
+            detail="Missing session_id cookie with authenticated session. Call POST /ws/client_auth to authenticate.",
+        )
     websocket = WebSocketU(raw_websocket, "client")
     log = logger.bind(device_id=websocket.id)
     await manager.connect_client(websocket)
@@ -302,3 +263,6 @@ async def ws_client(
     except WebSocketDisconnect as e:
         log.info("client disconnected", error=e)
         await manager.disconnect_client(websocket)
+
+
+app.mount("/", StaticFiles(directory="app/static/", html=True), name="static")
