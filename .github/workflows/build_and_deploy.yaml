@@ -54,7 +54,7 @@ jobs:
   deploy-latest:
     name: Deploy :latest to Server
     runs-on: ubuntu-latest
-    environment: production
+    environment: 20warren.alexwendland.com
     needs: build
     steps:
       - name: SSH into deployment server and restart service
