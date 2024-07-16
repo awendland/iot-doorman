@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+import os
 from pathlib import Path
 from typing import Annotated, Literal, Optional, Union
 from fastapi import (
@@ -20,6 +21,7 @@ import base64
 from cachetools import TTLCache
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+logger.info("starting server", git_version_hash=os.getenv("GIT_VERSION_HASH"))
 
 app = FastAPI()
 
