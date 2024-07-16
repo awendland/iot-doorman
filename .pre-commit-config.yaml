@@ -70,3 +70,4 @@ repos:
         language: system
         entry: bash -c 'cd server/ && just format && just lint'
         files: ^server/
+        pass_filenames: false
