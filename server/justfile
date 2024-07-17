@@ -35,3 +35,13 @@ format:
 # Lint the code
 lint:
     rye lint
+
+# Typecheck the code
+typecheck:
+    rye run pyright
+
+# Typecheck in watch mode
+typecheck-watch:
+    rye run pyright --watch
+
+check: format lint typecheck

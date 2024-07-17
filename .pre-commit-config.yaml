@@ -68,6 +68,6 @@ repos:
       - id: server-lint
         name: server lint & format
         language: system
-        entry: bash -c 'cd server/ && just format && just lint'
+        entry: bash -c 'cd server/ && just check'
         files: ^server/
         pass_filenames: false
