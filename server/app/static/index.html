@@ -110,15 +110,41 @@
             if (!firstStatus && entry[1].type === "device.status") {
               firstStatus = entry[1].status;
             }
-            var historyItem =
-              timestamp.toLocaleString() + ": " + JSON.stringify(entry[1]);
-            historyElement.textContent += historyItem + "\n";
+            var historyItem = document.createElement("div");
+            historyItem.classList.add("history-item");
+            var historyItemDate = document.createElement("span");
+            historyItemDate.classList.add("history-item-date");
+            historyItemDate.textContent = timestamp.toLocaleString();
+            var historyItemContent = document.createElement("div");
+            historyItemContent.classList.add("history-item-content");
+            historyItemContent.textContent = JSON.stringify(entry[1]);
+            historyItem.appendChild(historyItemDate);
+            historyItem.appendChild(historyItemContent);
+            historyElement.appendChild(historyItem);
           }
           var statusElement = document.getElementById("status");
           statusElement.textContent = "Status: " + firstStatus;
         }
       });
     </script>
+    <style>
+      #history {
+        width: 100%;
+        max-width: 400px;
+      }
+      .history-item:nth-child(even) {
+        background-color: lightgrey;
+      }
+      .history-item-date {
+        font-weight: bold;
+        font-size: smaller;
+      }
+      .history-item-content {
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
   </head>
 
   <body>
@@ -129,6 +155,6 @@
     </form>
     <button onclick="sendCommand()">Unlock</button>
     <pre id="status">Status: </pre>
-    <pre id="history"></pre>
+    <div id="history"></div>
   </body>
 </html>
