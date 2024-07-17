@@ -94,7 +94,7 @@
         function requestHistory() {
           var request = {
             type: "client.request_history",
-            max_entries: 8,
+            max_entries: 40,
           };
           socket.send(JSON.stringify(request));
         }
