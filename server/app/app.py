@@ -26,6 +26,10 @@ logger.info("starting server", git_version_hash=os.getenv("GIT_VERSION_HASH"))
 app = FastAPI()
 
 
+def now() -> datetime:
+    return datetime.now().astimezone()
+
+
 async def device_security(websocket: WebSocket):
     username = "device"
     password = "niYmTfkJ9c2k6XSD5y6LrC7Wcrpute"
@@ -175,7 +179,7 @@ class ConnectionManager:
         self.active_device: Optional[WebSocketU] = None
         self.active_clients: list[WebSocketU] = []
         self.history: list[tuple[datetime, DeviceMessage]] = [
-            (datetime.now(), DeviceStatusDisconnected())
+            (now(), DeviceStatusDisconnected())
         ]
 
     async def connect_device(self, websocket: WebSocketU):
@@ -195,7 +199,7 @@ class ConnectionManager:
         self.active_clients.remove(websocket)
 
     async def broadcast_device_status(self, status: DeviceStatus):
-        self.history.append((datetime.now(), status))
+        self.history.append((now(), status))
         status_msg = status.model_dump_json()
         await asyncio.gather(
             *(connection.c.send_text(status_msg) for connection in self.active_clients)
