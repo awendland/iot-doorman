@@ -102,8 +102,24 @@ class DeviceStatusLastCommand(BaseModel):
     last_command: DeviceCommand
 
 
+class DeviceRingStart(BaseModel):
+    type: Literal["device.status"] = "device.status"
+    status: Literal["ring.start"] = "ring.start"
+    timestamp: int
+
+
+class DeviceRingStop(BaseModel):
+    type: Literal["device.status"] = "device.status"
+    status: Literal["ring.stop"] = "ring.stop"
+    timestamp: int
+
+
 DeviceStatus = Union[
-    DeviceStatusConnected, DeviceStatusDisconnected, DeviceStatusLastCommand
+    DeviceStatusConnected,
+    DeviceStatusDisconnected,
+    DeviceStatusLastCommand,
+    DeviceRingStart,
+    DeviceRingStop,
 ]
 AnnotatedDeviceStatus = Annotated[DeviceStatus, Field(discriminator="status")]
 DeviceStatusAdapter: TypeAdapter[AnnotatedDeviceStatus] = TypeAdapter(
