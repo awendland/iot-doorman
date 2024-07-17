@@ -93,7 +93,7 @@ class DeviceStatusDisconnected(BaseModel):
 class DeviceStatusConnected(BaseModel):
     type: Literal["device.status"] = "device.status"
     status: Literal["connected"] = "connected"
-    rough_time: Optional[int] = None
+    timestamp_ntp: Optional[int] = None
 
 
 class DeviceStatusLastCommand(BaseModel):
