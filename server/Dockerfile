@@ -1,5 +1,5 @@
-ARG GIT_VERSION_HASH
 FROM python:3.12.3-slim
+ARG GIT_VERSION_HASH
 
 WORKDIR /app
 COPY requirements.lock ./
