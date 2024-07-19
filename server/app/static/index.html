@@ -161,7 +161,7 @@
                   .filter((entry) =>
                     ["connected", "disconnected"].includes(entry[1]?.status)
                   )
-                  .pop()?.[1]?.status;
+                  .shift()?.[1]?.status;
           const deviceStatusToVisual = {
             connected: { t: "connected", c: "green" },
             disconnected: { t: "disconnected", c: "red" },
