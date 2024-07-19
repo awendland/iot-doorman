@@ -154,11 +154,14 @@
             connected: { t: "live", c: "green" },
             error: { t: "error", c: "red" },
           };
-          const latestDeviceStatus = events
-            .filter((entry) =>
-              ["connected", "disconnected"].includes(entry[1]?.status)
-            )
-            .pop()?.[1]?.status;
+          const latestDeviceStatus =
+            state == "loading"
+              ? undefined
+              : events
+                  .filter((entry) =>
+                    ["connected", "disconnected"].includes(entry[1]?.status)
+                  )
+                  .pop()?.[1]?.status;
           const deviceStatusToVisual = {
             connected: { t: "connected", c: "green" },
             disconnected: { t: "disconnected", c: "red" },
