@@ -57,11 +57,9 @@
       async function* History({ events }) {
         for ({ events } of this) {
           yield jsx`
-          <div id="history">${events
-            .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-            .map((entry, i) => {
-              const timestamp = new Date(entry[0]);
-              return jsx`
+          <div id="history">${events.map((entry, i) => {
+            const timestamp = new Date(entry[0]);
+            return jsx`
               <div className="history-item" key=${i}>
                 <span className="history-item-date">${timestamp.toLocaleString()}</span>
                 <div className="history-item-content">${JSON.stringify(
@@ -69,7 +67,7 @@
                 )}</div>
               </div>
               `;
-            })}</div>
+          })}</div>
         `;
         }
       }
@@ -150,6 +148,7 @@
         openWebSocket();
 
         for ({} of this) {
+          events = events.sort((a, b) => new Date(b[0]) - new Date(a[0]));
           const stateToVisual = {
             loading: { t: "loading...", c: "gray" },
             connected: { t: "live", c: "green" },
