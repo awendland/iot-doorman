@@ -51,12 +51,17 @@
         }
       }
 
+      /**
+       * @param {{ events: [Date | string, { type: string, status: string }][] }} props
+       */
       async function* History({ events }) {
         for ({ events } of this) {
           yield jsx`
-          <div id="history">${events.map((entry, i) => {
-            const timestamp = new Date(entry[0]);
-            return jsx`
+          <div id="history">${events
+            .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+            .map((entry, i) => {
+              const timestamp = new Date(entry[0]);
+              return jsx`
               <div className="history-item" key=${i}>
                 <span className="history-item-date">${timestamp.toLocaleString()}</span>
                 <div className="history-item-content">${JSON.stringify(
@@ -64,7 +69,7 @@
                 )}</div>
               </div>
               `;
-          })}</div>
+            })}</div>
         `;
         }
       }
@@ -150,15 +155,21 @@
             connected: { t: "live", c: "green" },
             error: { t: "error", c: "red" },
           };
+          const latestDeviceStatus = events
+            .filter((entry) =>
+              ["connected", "disconnected"].includes(entry[1]?.status)
+            )
+            .pop()?.[1]?.status;
+          const deviceStatusToVisual = {
+            connected: { t: "connected", c: "green" },
+            disconnected: { t: "disconnected", c: "red" },
+            undefined: { t: "unknown", c: "gray" },
+          };
           yield jsx`
           <div>
-            <p>ws: <span style="color: ${stateToVisual[state].c}">${
-            stateToVisual[state].t
-          }</span></p>
+            <p>ws: <span style="color: ${stateToVisual[state].c}">${stateToVisual[state].t}</span></p>
             <button onclick=${sendUnlock}>Unlock</button>
-            <p>Status: ${
-              events.filter((entry) => entry[1]?.status).pop()?.[1]?.status
-            }</p>
+            <p>Device: <span style="color: ${deviceStatusToVisual[latestDeviceStatus].c}">${deviceStatusToVisual[latestDeviceStatus].t}</span></p>
             <${History} events=${events} />
           </div>
           `;
@@ -177,7 +188,7 @@
           yield jsx`
           <>
             <${Login} setIsLoggedIn=${setIsLoggedIn} isLoggedIn=${isLoggedIn} />
-            <${Controls} />
+            ${isLoggedIn ? jsx`<${Controls} />` : ""}
           </>
         `;
         }
