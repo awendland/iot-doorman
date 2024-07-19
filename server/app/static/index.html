@@ -1,49 +1,112 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        var socket; // Declare socket globally to use after login
-        var _history = [];
+    <script type="module">
+      import { jsx } from "https://unpkg.com/@b9g/crank/standalone?module";
+      import { renderer } from "https://unpkg.com/@b9g/crank/dom?module";
 
-        // Check localStorage for saved credentials
-        var savedUsername = localStorage.getItem("username");
-        var savedPassword = localStorage.getItem("password");
-        if (savedUsername && savedPassword) {
-          document.getElementById("username").value = savedUsername;
-          document.getElementById("password").value = savedPassword;
-          login();
-        }
+      async function* Login({ setIsLoggedIn, isLoggedIn }) {
+        let username = localStorage.getItem("username");
+        let password = localStorage.getItem("password");
 
-        async function login() {
-          var username = document.getElementById("username").value;
-          var password = document.getElementById("password").value;
+        const login = async () => {
+          const response = await fetch("/ws/client_auth", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `username=${encodeURIComponent(
+              username
+            )}&password=${encodeURIComponent(password)}`,
+          });
 
-          // Save credentials to localStorage
-          localStorage.setItem("username", username);
-          localStorage.setItem("password", password);
-
-          try {
-            // Create a new fetch request
-            const response = await fetch("/ws/client_auth", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
-              body: `username=${encodeURIComponent(
-                username
-              )}&password=${encodeURIComponent(password)}`,
-            });
-            if (!response.ok) {
-              console.log("Authentication failed");
-              return;
-            }
-          } catch (error) {
-            console.error("Error:", error);
+          if (!response.ok) {
             return;
           }
 
-          // WebSocket connection logic
+          setIsLoggedIn();
+          this.refresh();
+        };
+
+        const submit = (ev) => {
+          ev.preventDefault();
+          username = ev.target.elements.username.value;
+          password = ev.target.elements.password.value;
+          login();
+        };
+
+        login();
+
+        for ({ setIsLoggedIn, isLoggedIn } of this) {
+          yield jsx`
+          <details open=${isLoggedIn ? null : ""}>
+            <summary>Login</summary>
+            <form onsubmit=${submit}>
+              <input type="text" id="username" placeholder="Username" required value=${username} />
+              <input type="password" id="password" placeholder="Password" required value=${password} />
+              <button type="submit">Login</button>
+            </form>
+          </details>
+        `;
+        }
+      }
+
+      async function* History({ events }) {
+        for ({ events } of this) {
+          yield jsx`
+          <div id="history">${events.map((entry, i) => {
+            const timestamp = new Date(entry[0]);
+            return jsx`
+              <div className="history-item" key=${i}>
+                <span className="history-item-date">${timestamp.toLocaleString()}</span>
+                <div className="history-item-content">${JSON.stringify(
+                  entry[1]
+                )}</div>
+              </div>
+              `;
+          })}</div>
+        `;
+        }
+      }
+
+      async function* Controls() {
+        const _this = this;
+        /** @type {'loading' | 'connected' | 'error'} */
+        let state = "loading";
+        /** @type {WebSocket} */
+        let socket;
+        /** @type {[Date | string, { type: string, status: string }][]} */
+        let events = [];
+
+        const sendCommand = (cmd, params) => {
+          if (!socket)
+            return console.log(`[Controls.sendCommand] socket not open`);
+          socket.send(
+            JSON.stringify({
+              type: "client.send_command",
+              command: {
+                type: "device.cmd",
+                cmd,
+                ...params,
+              },
+            })
+          );
+        };
+
+        const sendUnlock = () => {
+          sendCommand("unlock", { duration: 5 });
+        };
+
+        const requestHistory = () => {
+          socket.send(
+            JSON.stringify({
+              type: "client.request_history",
+              max_entries: 40,
+            })
+          );
+        };
+
+        const openWebSocket = () => {
           socket = new WebSocket(
             `ws${window.location.protocol === "https:" ? "s" : ""}://${
               window.location.host
@@ -51,94 +114,92 @@
           );
 
           socket.onopen = function (event) {
-            console.log("WebSocket connection established.");
+            console.log(`[Controls.openWebsocket] connection opened`, event);
+            state = "connected";
+            _this.refresh();
             requestHistory();
           };
 
           socket.onmessage = function (event) {
-            console.log("Received message:", event.data);
+            console.log(
+              `[Controls.openWebsocket] message received`,
+              event.data
+            );
             var message = JSON.parse(event.data);
             if (message.type === "device.status") {
-              _history.push([new Date(), message]);
+              events.push([new Date(), message]);
             } else if (message.type === "client.response_history") {
-              _history = message.history;
+              events = message.history;
             }
-            updateHistory(_history); // Use _history for update
+            _this.refresh();
           };
 
           socket.onclose = function (event) {
-            console.log("WebSocket connection closed.");
+            console.log(`[Controls.openWebsocket] connection closed`, event);
+            state = "loading";
+            _this.refresh();
+            setTimeout(() => openWebSocket(), 2000);
           };
-        }
-
-        document
-          .getElementById("loginForm")
-          .addEventListener("submit", async function (event) {
-            event.preventDefault(); // Prevent form from submitting traditionally
-            await login();
-          });
-
-        window.sendCommand = function () {
-          // Make sendCommand globally accessible
-          var command = {
-            type: "client.send_command",
-            command: {
-              type: "device.cmd",
-              cmd: "unlock",
-              duration: 5,
-            },
-          };
-          socket.send(JSON.stringify(command));
         };
 
-        function requestHistory() {
-          var request = {
-            type: "client.request_history",
-            max_entries: 40,
-          };
-          socket.send(JSON.stringify(request));
-        }
+        openWebSocket();
 
-        function updateHistory(history) {
-          var historyElement = document.getElementById("history");
-          historyElement.textContent = "";
-          var firstStatus;
-          for (var i = history.length - 1; i >= 0; i--) {
-            // Use passed history for iteration
-            var entry = history[i];
-            var timestamp = new Date(entry[0]);
-            if (!firstStatus && entry[1].type === "device.status") {
-              firstStatus = entry[1].status;
-            }
-            var historyItem = document.createElement("div");
-            historyItem.classList.add("history-item");
-            var historyItemDate = document.createElement("span");
-            historyItemDate.classList.add("history-item-date");
-            historyItemDate.textContent = timestamp.toLocaleString();
-            var historyItemContent = document.createElement("div");
-            historyItemContent.classList.add("history-item-content");
-            historyItemContent.textContent = JSON.stringify(entry[1]);
-            historyItem.appendChild(historyItemDate);
-            historyItem.appendChild(historyItemContent);
-            historyElement.appendChild(historyItem);
-          }
-          var statusElement = document.getElementById("status");
-          statusElement.textContent = "Status: " + firstStatus;
+        for ({} of this) {
+          const stateToVisual = {
+            loading: { t: "loading...", c: "gray" },
+            connected: { t: "live", c: "green" },
+            error: { t: "error", c: "red" },
+          };
+          yield jsx`
+          <div>
+            <p>ws: <span style="color: ${stateToVisual[state].c}">${
+            stateToVisual[state].t
+          }</span></p>
+            <button onclick=${sendUnlock}>Unlock</button>
+            <p>Status: ${
+              events.filter((entry) => entry[1]?.status).pop()?.[1]?.status
+            }</p>
+            <${History} events=${events} />
+          </div>
+          `;
         }
-      });
+      }
+
+      async function* App() {
+        let isLoggedIn = false;
+
+        const setIsLoggedIn = () => {
+          isLoggedIn = true;
+          this.refresh();
+        };
+
+        for ({} of this) {
+          yield jsx`
+          <>
+            <${Login} setIsLoggedIn=${setIsLoggedIn} isLoggedIn=${isLoggedIn} />
+            <${Controls} />
+          </>
+        `;
+        }
+      }
+
+      renderer.render(jsx`<${App} />`, document.getElementById("root"));
     </script>
     <style>
       #history {
         width: 100%;
         max-width: 800px;
       }
+
       .history-item:nth-child(even) {
         background-color: lightgrey;
       }
+
       .history-item-date {
         font-weight: bold;
         font-size: smaller;
       }
+
       .history-item-content {
         font-family: monospace;
         white-space: pre-wrap;
@@ -148,13 +209,6 @@
   </head>
 
   <body>
-    <form id="loginForm">
-      <input type="text" id="username" placeholder="Username" required />
-      <input type="password" id="password" placeholder="Password" required />
-      <button type="submit">Login</button>
-    </form>
-    <button onclick="sendCommand()">Unlock</button>
-    <pre id="status">Status: </pre>
-    <div id="history"></div>
+    <div id="root"></div>
   </body>
 </html>
