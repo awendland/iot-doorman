@@ -1,0 +1,34 @@
+#!/usr/bin/env just --justfile
+# Just is a replacement for Make. It's focused on running project-specific instead
+# of building C code, so it's easier to work with. It's available in almost all
+# package libraries, e.g., `brew install just`.
+#
+# Quick Start: https://just.systems/man/en/chapter_18.html
+
+default:
+    @just --list
+
+# Ensure that PlatformIO is installed
+setup-platform-io:
+    python -m venv .venv/
+    .venv/bin/python -m pip install -U platformio
+    just pio --version
+
+# Must be run after you've followed the "Setup" instruction in README.md.
+setup: setup-platform-io
+
+# Run platformio commands
+pio *args:
+    .venv/bin/pio {{args}}
+
+# Check the firmware
+check:
+    just pio check --skip-packages --fail-on-defect medium
+
+# Device monitor
+monitor:
+    just pio device monitor | perl -pe 'use POSIX strftime; print strftime "[%Y-%m-%d %H:%M:%S] ", localtime'
+
+# Build and run the firmware
+upload:
+    just pio run --target upload
